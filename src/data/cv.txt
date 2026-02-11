@@ -1,0 +1,70 @@
+ADITYA TAMILISETTI
+London | +44 07400684829 | aditya16902@gmail.com | linkedin.com/in/aditya-tamilisetti | github.com/aditya16902
+
+SUMMARY
+Experienced data science professional (MSc Data Science, LSE), with expertise in classical ML (predictive modeling, classification), NLP, and Applied AI. USP: Building production-ready AI engineering solutions—including RAG systems, intelligent agents, and automation workflows—that deliver commercial impact.
+
+SKILLS
+Programming Languages: Python, R, SQL
+Tools: n8n, MySQLWorkbench, Docker, GitHub, AWS, Tableau, Pinecone
+Libraries and Frameworks: Pandas, Numpy, scikit-learn, TensorFlow, MLflow, Langchain
+
+ACHIEVEMENTS
+Winner (1/10; £1000), LSE - ALLIANZ Personal Insurance PGPC Challenge
+- Tackled highly zero-inflated dataset comprising 96% zero instances by implementing REBAGG and ensemble learning techniques to effectively address the challenge of predicting insurance claims
+- Presented results to 100+ at Allianz annual meeting, conveying insights to non-technical stakeholders.
+
+EDUCATION
+MSc Data Science, The London School of Economics | Sep 2023 - Aug 2024 | London, UK
+BBA (Business Analytics), GITAM | Sep 2020 – May 2023 | Vizag, India
+Coursework: Financial Accounting, Financial Management, Business Economics, Statistics, Predictive Analytics etc
+
+EXPERIENCE
+
+AI Engineer / Business Developer, KCM | Oct 2025 - Dec 2025 | London, UK
+- Built scrappers to track the US, UK and EU related Government fundings and and implemented an NLP-powered SQL query generator to retrieve the most relevant funding data efficiently.
+- Deployed the framework in AWS: EC2 and Aurora RDS, with query caching to reduce LLM API costs and authentication to enable different teams to use different DB schemas.
+
+Data Scientist, Souq AI | July 2025 - Nov 2025 | London, UK
+- Built the backend for an AI tools marketplace, delivering personalized, enterprise-ready AI recommendations
+- Scraped Product hunt, Capterra etc and latest blogs to discover latest AI tools. Enriched the scraped content with LLM & AI Agent workflow and classified tools into enterprise level, niche, newly launched.
+
+Data Scientist, Oxford Data Plan | Mar 2025 - Jun 2025 | London, UK
+- Built and managed 15+ forecasting models for IAG, EasyJet, etc to track revenue and Financial KPIs
+- Owned the process end-to-end, from SEC filing research, curating relevant features from large-scale datasets (transaction records, pricing data, text, satellite/geospatial imagery) to AWS deployment.
+
+Student Data Scientist, KPMG | Dec 2023 - Aug 2024 | Manchester, UK
+- Led an urban traffic optimization project, analyzing bus ridership, rental trends, and air quality using predictive modeling. Modeled bus network coverage vs. vehicle pollution impact using Linear Regression/Random Forest on GCP, integrating OpenWeather API pollutants (NO2, S02) with traffic data
+
+PROJECTS
+
+Portfolio Management with Deep Learning Techniques
+- Achieved 19x higher returns with CNN-BiLSTM over equal portfolio, leveraged SHAP for explainability.
+- Employed weekly rebalancing and Markowitz mean-variance optimization to effectively adapt market conditions
+
+Automated Dictionary Creation for Depression Detection in Social Media Text (NLP)
+- Developed an automated corpus-native dictionary of Reddit posts (7000+) by integrating Latent Dirichlet Allocation (LDA) for topic modeling and Elastic Net for classification.
+- Achieved 71% classification and 79% sentiment analysis accuracy, capturing mental health discourse nuances
+
+AI Deep Research Agent
+- Built LangChain Deep Agent-based AI Research Agent orchestrating multi-agent workflow for topic decomposition, Tavily/Perplexity web searches, and McKinsey-style report generation with human-in-the-loop.
+
+TickerPredict: AI-Powered Stock Prediction Platform
+- Developed end-to-end AWS-deployed AI system tracking 5+ stock tickers (closing-price) for Coca-Cola, EasyJet etc. Utilised SLM for personalised portfolio optimisation strategies.
+
+United Kingdom Crime Analysis
+- Achieved 67% explainability using SARIMA in forecasting by integrating UK Police data and ONS data
+- Analysed an 8 GB messy dataset, achieving insights into crime patterns, stop and search procedures in UK
+
+CERTIFICATIONS
+IELTS: 7.0
+Course on Blockchain, Crypto & N.F.T, Udemy
+Machine Learning Introduction for Everyone, IBM Skills Network
+Linear Regression for Business Statistics, Rice University
+AI For Everyone, DeepLearning.AI
+Programming for Everybody (Getting Started with Python), University of Michigan
+Probability Theory, Statistics and Exploratory Data Analysis, HSE University
+Research Design: Inquiry and Discovery, Rice University
+Data Analysis with R, IBM Skills Network
+Fundamentals of Visualization with Tableau, University of California, Davis
+Introduction to Calculus, The University of Sydney

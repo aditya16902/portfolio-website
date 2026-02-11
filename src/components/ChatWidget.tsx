@@ -81,15 +81,12 @@ export default function ChatWidget({ isOpen, onClose }: ChatWidgetProps) {
 
   return (
     <div className="w-1/2 h-screen bg-[#0a0a0a] border-r border-gray-800/50 flex flex-col">
-      {/* Header */}
+      {/* Header - Simplified, no name */}
       <div className="flex items-center justify-between p-6 border-b border-gray-800/50">
-        <div>
-          <h3 className="text-lg font-semibold text-white">Aditya Tamilisetti</h3>
-          <p className="text-sm text-gray-400">AI & Data Science</p>
-        </div>
+        <div className="flex-1" /> {/* Spacer */}
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-900 rounded-lg"
+          className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-900 rounded-lg ml-auto"
           aria-label="Close chat"
         >
           <X size={20} />
@@ -125,10 +122,10 @@ export default function ChatWidget({ isOpen, onClose }: ChatWidgetProps) {
                   Give me a quick overview of you.
                 </button>
                 <button
-                  onClick={() => setInput("Summarize this page.")}
+                  onClick={() => setInput("Tell me about your projects.")}
                   className="text-sm text-left text-gray-300 hover:text-white bg-gray-900/50 hover:bg-gray-900 px-4 py-3 rounded-lg transition-colors"
                 >
-                  Summarize this page.
+                  Tell me about your projects.
                 </button>
               </div>
             </div>
@@ -170,33 +167,45 @@ export default function ChatWidget({ isOpen, onClose }: ChatWidgetProps) {
       </div>
 
       {/* Input Area */}
-      <form onSubmit={handleSubmit} className="p-6 border-t border-gray-800/50">
-        <div className="flex gap-2 items-center">
-          <button type="button" className="text-gray-400 hover:text-white p-2">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </button>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type a message..."
-            disabled={isLoading}
-            className="flex-1 bg-transparent text-white px-4 py-3 focus:outline-none disabled:opacity-50 placeholder-gray-500"
-            autoComplete="off"
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="bg-gray-700 hover:bg-gray-600 text-white p-3 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Send message"
-          >
-            <Send size={18} />
-          </button>
-        </div>
-      </form>
+      <div className="border-t border-gray-800/50">
+        <form onSubmit={handleSubmit} className="p-6 pb-3">
+          <div className="flex gap-2 items-center">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type a message..."
+              disabled={isLoading}
+              className="flex-1 bg-transparent text-white px-4 py-3 focus:outline-none disabled:opacity-50 placeholder-gray-500"
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="bg-gray-700 hover:bg-gray-600 text-white p-3 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Send message"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        </form>
+        
+        {/* Reset Chat Button */}
+        {messages.length > 0 && (
+          <div className="px-6 pb-6 flex justify-center">
+            <button
+              onClick={() => {
+                setMessages([]);
+                setInput('');
+              }}
+              className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2 hover:bg-gray-900 rounded-lg"
+            >
+              Reset Chat
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

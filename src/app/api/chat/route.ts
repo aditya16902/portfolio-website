@@ -1,172 +1,224 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Groq from 'groq-sdk';
+import { findRelevantContext } from '@/lib/rag';
 
-const HF_API_KEY = process.env.HUGGINGFACE_API_KEY;
-const HF_MODEL = 'meta-llama/Llama-3.2-1B-Instruct';
+// Abuse detection system
+const abuseTracker = new Map<string, { count: number; lastReset: number }>();
 
-// Context about Aditya based on CV
-const ADITYA_CONTEXT = `
-You are an AI assistant representing Aditya Tamilisetti, a Data Science and AI Engineering professional.
-
-BACKGROUND:
-- MSc Data Science from The London School of Economics (Sep 2023 - Aug 2024)
-- BBA in Business Analytics from GITAM (Sep 2020 - May 2023)
-- Based in London, UK
-- Contact: aditya16902@gmail.com
-- LinkedIn: linkedin.com/in/aditya-tamilisetti
-- GitHub: github.com/aditya16902
-
-EXPERTISE:
-- Classical ML (predictive modeling, classification)
-- NLP and Applied AI
-- Building production-ready AI engineering solutions (RAG systems, intelligent agents, automation workflows)
-- Programming: Python, R, SQL
-- Tools: n8n, MySQL, Docker, GitHub, AWS, Tableau, Pinecone
-- Libraries: Pandas, NumPy, scikit-learn, TensorFlow, MLflow, Langchain
-
-KEY ACHIEVEMENTS:
-- Winner of LSE-ALLIANZ Personal Insurance Challenge (£1000 prize, 1/10)
-- Tackled highly zero-inflated dataset (96% zeros) using REBAGG and ensemble learning
-- Presented results to 100+ people at Allianz annual meeting
-
-WORK EXPERIENCE:
-1. AI Engineer / Business Developer at KCM (Oct 2025 - Dec 2025, London)
-   - Built web scrapers to track US, UK, EU government funding
-   - Implemented NLP-powered SQL query generator
-   - Deployed on AWS (EC2, Aurora RDS) with query caching
-
-2. Data Scientist at Souq AI (July 2025 - Nov 2025, London)
-   - Built backend for AI tools marketplace
-   - Scraped Product Hunt, Capterra for latest AI tools
-   - Enriched content with LLM & AI Agent workflows
-
-3. Data Scientist at Oxford Data Plan (Mar 2025 - Jun 2025, London)
-   - Built and managed 15+ forecasting models for IAG, EasyJet
-   - End-to-end ownership from research to AWS deployment
-
-4. Student Data Scientist at KPMG (Dec 2023 - Aug 2024, Manchester)
-   - Led urban traffic optimization project
-   - Modeled bus network coverage vs vehicle pollution using Linear Regression/Random Forest
-
-KEY PROJECTS:
-1. Portfolio Management with Deep Learning - Achieved 19x higher returns with CNN-BiLSTM
-2. Automated Dictionary Creation for Depression Detection - 71% classification accuracy using LDA and Elastic Net
-3. AI Deep Research Agent - LangChain-based multi-agent workflow
-4. TickerPredict - AI-powered stock prediction platform on AWS
-5. UK Crime Analysis - 67% accuracy using SARIMA forecasting
-
-SKILLS:
-- Strong in machine learning, deep learning, NLP
-- Production AI systems deployment
-- Data analysis and visualization
-- Business intelligence and forecasting
-
-Answer questions as if you are Aditya, using first person ("I", "my"). Be professional, knowledgeable, and helpful.
-`;
-
-const PERSONA_PROMPTS = {
-  technical: `Respond in a technical, detailed manner. Use technical terms, explain methodologies, and dive into implementation details. Focus on the technical aspects of projects and work.`,
+function isRelevantQuery(message: string): boolean {
+  // Normalize message
+  const normalized = message.toLowerCase().trim();
   
-  entrepreneurial: `Respond with an entrepreneurial lens. Focus on business impact, value creation, problem-solving, and commercial outcomes. Emphasize how technical work translates to business value.`,
+  // Detect obvious abuse patterns FIRST (before checking keywords)
+  // Math patterns - catch anywhere in the message
+  const mathPatterns = [
+    /\d+\s*[+\-*/x÷]\s*\d+/,  // "1+1", "5*3", "whats 1+1", "calculate 5-2"
+    /\d+\s*(plus|minus|times|divided by|multiplied by)\s*\d+/i,
+    /(what('s| is)|calculate|compute|solve)\s*\d+\s*[+\-*/x÷]\s*\d+/i,
+  ];
   
-  professional: `Respond in a professional, polished manner. Be formal yet approachable. Focus on achievements, impact, and professional growth. Suitable for networking and professional contexts.`,
+  // General knowledge patterns
+  const generalKnowledgePatterns = [
+    /what('s| is) the (capital|population|currency|language) of/i,
+    /what('s| is) the (weather|temperature|time|date)/i,
+    /who (is|was) (the )?(president|prime minister|king|queen)/i,
+    /when (did|was|is)/i,
+    /where (is|was|are)/i,
+  ];
   
-  creative: `Respond in a creative, engaging manner. Use storytelling, metaphors, and interesting angles. Make technical concepts accessible and compelling.`,
+  // Personal assistance patterns
+  const assistancePatterns = [
+    /(write|draft|create|compose) (a|an|my) (email|letter|essay|story|poem|document)/i,
+    /(book|schedule|reserve|order|buy|purchase) (a|an|my|me)/i,
+    /(play|stream|download|watch|listen)/i,
+    /(cook|recipe for|how to (make|cook|prepare)) (?!.*(resume|cv|portfolio))/i,
+    /translate .* to/i,
+  ];
   
-  default: `Respond in a balanced, informative manner. Be clear, concise, and helpful. Provide context when needed but avoid being overly technical or casual.`
-};
+  // Combine all abuse patterns
+  const allAbusePatterns = [...mathPatterns, ...generalKnowledgePatterns, ...assistancePatterns];
+  
+  // Check for abuse FIRST - if it's abuse, reject immediately regardless of keywords
+  const isAbuse = allAbusePatterns.some(pattern => pattern.test(normalized));
+  if (isAbuse) {
+    console.log('🚫 Abuse pattern detected:', normalized);
+    return false;
+  }
+  
+  // Professional/resume-related keywords (more specific now, removed overly broad "what")
+  const relevantKeywords = [
+    // Identity & info - be more specific
+    'aditya', 'your background', 'your experience', 'your skills',
+    'who are you', 'tell me about you', 'about you',
+    // Experience related
+    'experience', 'work', 'worked', 'job', 'role', 'position', 'company', 'employer',
+    'google', 'kpmg', 'kcm', 'souq', 'oxford', 'lse',
+    // Skills & technical
+    'skill', 'python', 'ai', 'ml', 'machine learning', 'data', 'project',
+    'tensorflow', 'pytorch', 'aws', 'cloud', 'langchain', 'rag',
+    // Education
+    'education', 'degree', 'university', 'study', 'studied', 'london school',
+    // Projects
+    'project', 'portfolio', 'built', 'developed', 'created',
+    // General career
+    'career', 'background', 'qualification', 'achievement', 'award',
+    'expertise', 'specialize', 'focus',
+    // Conversational (safe greetings)
+    'hello', 'hi', 'hey', 'help', 'can you help'
+  ];
+  
+  // Check if query contains relevant keywords
+  const hasRelevantKeywords = relevantKeywords.some(keyword => 
+    normalized.includes(keyword)
+  );
+  
+  if (hasRelevantKeywords) return true;
+  
+  // For very short queries (< 15 chars), be more strict
+  // Allow generic greetings but nothing else
+  if (normalized.length < 15) {
+    const safeShortQueries = ['hi', 'hello', 'hey', 'help', 'thanks', 'ok', 'yes', 'no'];
+    return safeShortQueries.some(q => normalized === q || normalized === q + '!');
+  }
+  
+  // Medium length queries (15-30 chars) without keywords are likely off-topic
+  if (normalized.length < 30) return false;
+  
+  // Long queries without relevant keywords are definitely off-topic
+  return false;
+}
+
+function trackAbuse(sessionId: string): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const WINDOW_MS = 3600000; // 1 hour
+  const MAX_WARNINGS = 3; // 3 warnings per hour
+  
+  let tracker = abuseTracker.get(sessionId);
+  
+  // Reset if window expired
+  if (!tracker || now - tracker.lastReset > WINDOW_MS) {
+    tracker = { count: 0, lastReset: now };
+    abuseTracker.set(sessionId, tracker);
+  }
+  
+  tracker.count++;
+  
+  return {
+    allowed: tracker.count <= MAX_WARNINGS,
+    remaining: Math.max(0, MAX_WARNINGS - tracker.count)
+  };
+}
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, persona = 'default', history = [] } = await request.json();
+    const { message, history = [] } = await request.json();
+
+    console.log('📩 Received message:', message);
 
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    if (!HF_API_KEY) {
-      return NextResponse.json(
-        { error: 'Hugging Face API key not configured' },
-        { status: 500 }
-      );
-    }
+    // Get session identifier (using IP or generate session ID)
+    const sessionId = request.headers.get('x-forwarded-for') || 
+                     request.headers.get('x-real-ip') || 
+                     'anonymous';
 
-    // Build conversation history
-    const conversationHistory = history.slice(-4).map((msg: any) => ({
-      role: msg.role,
-      content: msg.content
-    }));
-
-    // Create the system prompt with persona
-    const systemPrompt = `${ADITYA_CONTEXT}
-
-${PERSONA_PROMPTS[persona as keyof typeof PERSONA_PROMPTS] || PERSONA_PROMPTS.default}
-
-Keep responses concise (2-4 sentences unless more detail is specifically requested). Be engaging and personable.`;
-
-    // Prepare messages for the API
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...conversationHistory,
-      { role: 'user', content: message }
-    ];
-
-    // Call Hugging Face Inference API
-    const response = await fetch(
-      `https://api-inference.huggingface.co/models/${HF_MODEL}`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${HF_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: messages.map(m => `${m.role}: ${m.content}`).join('\n\n'),
-          parameters: {
-            max_new_tokens: 250,
-            temperature: 0.7,
-            top_p: 0.9,
-            return_full_text: false,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Hugging Face API error:', errorText);
+    // Check if query is relevant
+    const isRelevant = isRelevantQuery(message);
+    
+    if (!isRelevant) {
+      // Track abuse attempt
+      const { allowed, remaining } = trackAbuse(sessionId);
       
-      // Fallback response
+      console.log('⚠️ Off-topic query detected:', message);
+      console.log(`🔢 Abuse count for ${sessionId}: ${4 - remaining}/3, remaining: ${remaining}`);
+      
+      if (!allowed) {
+        // Rate limit exceeded
+        console.log('🚫 RATE LIMITED:', sessionId);
+        return NextResponse.json({
+          response: "I appreciate your interest, but I've noticed multiple queries unrelated to Aditya's professional background. This chat is designed to answer questions about his experience, projects, and skills. Please ask relevant questions, or try again in an hour."
+        });
+      }
+      
+      // First few warnings - be helpful
+      console.log(`⚠️ WARNING ${4 - remaining}/3 for ${sessionId}`);
       return NextResponse.json({
-        response: "Thanks for reaching out! I'm Aditya, a Data Scientist and AI Engineer based in London. I specialize in building production-ready AI solutions, from RAG systems to intelligent agents. Feel free to ask me about my experience at companies like KCM, Souq AI, or my projects!"
+        response: `I'm Aditya's AI assistant, designed to answer questions about his professional background, experience, projects, and skills. Your question doesn't seem related to these topics.\n\nYou have ${remaining} ${remaining === 1 ? 'warning' : 'warnings'} remaining before being rate-limited.\n\nPlease ask about:\n• My work experience and roles\n• My technical skills and projects\n• My education and achievements\n• My AI/ML expertise\n\nHow can I help you learn about Aditya's professional background?`
+      });
+    }
+    
+    console.log('✅ Query is relevant, processing with RAG...');
+
+    if (!process.env.GROQ_API_KEY) {
+      return NextResponse.json({
+        response: 'Please add GROQ_API_KEY to your .env.local file. Get it from https://console.groq.com/keys'
       });
     }
 
-    const data = await response.json();
-    let assistantResponse = '';
+    // 🔍 RAG: Find relevant context from CV
+    console.log('🔍 Finding relevant context...');
+    const relevantContext = findRelevantContext(message, 3);
+    console.log('✅ Found context:', relevantContext.substring(0, 200) + '...');
 
-    if (Array.isArray(data) && data[0]?.generated_text) {
-      assistantResponse = data[0].generated_text.trim();
-    } else if (data.generated_text) {
-      assistantResponse = data.generated_text.trim();
-    } else {
-      // Fallback
-      assistantResponse = "Thanks for your question! I'm Aditya, a Data Scientist specializing in AI and ML. What would you like to know about my background or projects?";
+    // Build system prompt with RAG context
+    const systemPrompt = `You are Aditya Tamilisetti, a Data Scientist and AI Engineer based in London.
+
+CONTEXT FROM CV:
+${relevantContext}
+
+Answer questions as Aditya in first person ("I", "my"). Be concise (2-3 sentences unless detail is requested), professional, and helpful. Use information from the context above when relevant.`;
+
+    // Build conversation messages
+    const messages = [
+      {
+        role: 'system',
+        content: systemPrompt
+      },
+      ...history.slice(-4).map((msg: any) => ({
+        role: msg.role,
+        content: msg.content
+      })),
+      {
+        role: 'user',
+        content: message
+      }
+    ];
+
+    console.log('🤖 Calling Groq API...');
+
+    // Call Groq API
+    const completion = await groq.chat.completions.create({
+      messages: messages as any,
+      model: 'llama-3.1-8b-instant', // Fast and good quality
+      temperature: 0.7,
+      max_tokens: 300,
+      top_p: 0.9,
+    });
+
+    const response = completion.choices[0]?.message?.content || 
+      "I'm Aditya, a Data Scientist and AI Engineer in London. Ask me about my experience, projects, or skills!";
+
+    console.log('✅ Response generated:', response.substring(0, 100) + '...');
+
+    return NextResponse.json({ response });
+
+  } catch (error: any) {
+    console.error('❌ Chat error:', error.message);
+    
+    if (error.message?.includes('API key')) {
+      return NextResponse.json({
+        response: 'API key error. Please check your GROQ_API_KEY in .env.local'
+      });
     }
 
-    // Clean up response
-    assistantResponse = assistantResponse
-      .replace(/^assistant:\s*/i, '')
-      .replace(/^system:\s*/i, '')
-      .replace(/^user:\s*/i, '')
-      .trim();
-
-    return NextResponse.json({ response: assistantResponse });
-
-  } catch (error) {
-    console.error('Chat API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      response: "Hi! I'm Aditya, a Data Scientist and AI Engineer in London. I specialize in RAG systems, intelligent agents, and production AI. Ask me about my work!"
+    });
   }
 }
