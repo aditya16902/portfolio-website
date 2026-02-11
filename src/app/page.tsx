@@ -72,11 +72,11 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
     let interval = 60000; // Default: every minute
     if (timeFormatIndex === 6) interval = 100; // Milliseconds
     else if (timeFormatIndex === 2 || timeFormatIndex === 5) interval = 1000; // Seconds
-    
+
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, interval);
-    
+
     return () => clearInterval(timer);
   }, [timeFormatIndex]);
 
@@ -132,7 +132,7 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
         return `${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${ms.toString().padStart(3, '0')} ${ampm}`;
       }
     ];
-    
+
     return formats[formatIndex % formats.length]();
   };
 
@@ -187,7 +187,7 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
               <h1 className="text-2xl font-serif font-bold">Aditya Tamilisetti</h1>
               <p className="text-gray-400 text-sm">Data Science & AI</p>
             </div>
-            
+
             <button
               onClick={() => setIsChatOpen(!isChatOpen)}
               className="px-4 py-2 bg-white/90 hover:bg-white text-black rounded-lg transition-all duration-200 text-sm font-medium hover:shadow-lg hover:shadow-white/20"
@@ -204,9 +204,8 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
                 <button
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
-                  className={`py-4 text-sm transition-colors relative ${
-                    activeSection === section.id ? 'text-white' : 'text-gray-400 hover:text-white'
-                  }`}
+                  className={`py-4 text-sm transition-colors relative ${activeSection === section.id ? 'text-white' : 'text-gray-400 hover:text-white'
+                    }`}
                 >
                   {section.title}
                   {activeSection === section.id && (
@@ -220,7 +219,7 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
 
         <div className="flex-1 overflow-y-auto relative">
           <div className="max-w-4xl mx-auto px-8 py-12 pb-24">
-            
+
             {/* BRIEF SECTION */}
             {activeSection === 'brief' && (
               <section className="space-y-8">
@@ -232,18 +231,16 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
                     {selectedBriefPersona}
                     <ChevronDown size={16} className={`transition-transform duration-200 ${showPersonaSelector ? 'rotate-180' : ''}`} />
                   </button>
-                  
+
                   {showPersonaSelector && (
                     <div className="absolute top-full left-0 mt-2 bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg shadow-xl z-10 min-w-[200px]">
                       {Object.keys(briefContent).map((persona, index) => (
                         <button
                           key={persona}
                           onClick={() => handlePersonaChange(persona as keyof typeof briefContent)}
-                          className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-800 transition-colors capitalize ${
-                            selectedBriefPersona === persona ? 'bg-gray-800 text-white' : 'text-gray-300'
-                          } ${index === 0 ? 'rounded-t-lg' : ''} ${
-                            index === Object.keys(briefContent).length - 1 ? 'rounded-b-lg' : ''
-                          }`}
+                          className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-800 transition-colors capitalize ${selectedBriefPersona === persona ? 'bg-gray-800 text-white' : 'text-gray-300'
+                            } ${index === 0 ? 'rounded-t-lg' : ''} ${index === Object.keys(briefContent).length - 1 ? 'rounded-b-lg' : ''
+                            }`}
                         >
                           {persona}
                         </button>
@@ -296,7 +293,7 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
             {activeSection === 'experience' && (
               <section className="space-y-8">
                 <h2 className="text-4xl font-serif font-bold mb-6">Experience</h2>
-                
+
                 <div className="space-y-8">
                   <div className="border-b border-gray-800/50 pb-8">
                     <div className="flex justify-between items-start mb-3">
@@ -340,7 +337,7 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
                         <p className="text-gray-400">Oxford Data Plan</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-gray-400">Mar 2025 - Jun 2025</p>
+                        <p className="text-sm text-gray-400">Mar 2025 - Aug 2025</p>
                         <p className="text-sm text-gray-400">London, UK</p>
                       </div>
                     </div>
@@ -374,7 +371,7 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
             {activeSection === 'projects' && (
               <section className="space-y-8">
                 <h2 className="text-4xl font-serif font-bold mb-6">Projects</h2>
-                
+
                 <div className="space-y-6">
                   <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
                     <h3 className="text-xl font-semibold mb-2">Portfolio Management with Deep Learning</h3>
@@ -426,7 +423,7 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
             {activeSection === 'skills' && (
               <section className="space-y-8">
                 <h2 className="text-4xl font-serif font-bold mb-6">Skills & Expertise</h2>
-                
+
                 <div className="space-y-6">
                   <div>
                     <h3 className="text-xl font-semibold mb-4 text-gray-400">Programming Languages</h3>

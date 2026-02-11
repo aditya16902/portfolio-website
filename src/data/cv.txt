@@ -29,7 +29,7 @@ Data Scientist, Souq AI | July 2025 - Nov 2025 | London, UK
 - Built the backend for an AI tools marketplace, delivering personalized, enterprise-ready AI recommendations
 - Scraped Product hunt, Capterra etc and latest blogs to discover latest AI tools. Enriched the scraped content with LLM & AI Agent workflow and classified tools into enterprise level, niche, newly launched.
 
-Data Scientist, Oxford Data Plan | Mar 2025 - Jun 2025 | London, UK
+Data Scientist, Oxford Data Plan | Mar 2025 - Aug 2025 | London, UK
 - Built and managed 15+ forecasting models for IAG, EasyJet, etc to track revenue and Financial KPIs
 - Owned the process end-to-end, from SEC filing research, curating relevant features from large-scale datasets (transaction records, pricing data, text, satellite/geospatial imagery) to AWS deployment.
 
