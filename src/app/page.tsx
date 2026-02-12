@@ -180,7 +180,9 @@ Currently, I'm fascinated by the considerable discrepancy between the latent cap
     <div className="flex h-screen overflow-hidden bg-[#0a0a0a]">
       {isChatOpen && <ChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />}
 
-      <main className="flex-1 min-h-screen text-white flex flex-col relative">
+      <main className={`flex-1 min-h-screen text-white flex flex-col relative ${
+        isChatOpen ? 'hidden md:block' : 'block'
+      }`}>
         <header className="border-b border-gray-800/50 bg-[#0a0a0a]/80 backdrop-blur-sm z-40">
           <div className="max-w-4xl mx-auto px-8 py-6 flex justify-between items-center">
             <div>

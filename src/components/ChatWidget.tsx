@@ -63,8 +63,8 @@ export default function ChatWidget({ isOpen, onClose }: ChatWidgetProps) {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Sorry, I encountered an error. Please try again.' 
-      }]);
+          content: 'Sorry, I encountered an error. Please try again.' 
+        }]);
     } finally {
       setIsLoading(false);
     }
@@ -80,16 +80,19 @@ export default function ChatWidget({ isOpen, onClose }: ChatWidgetProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="w-1/2 h-screen bg-[#0a0a0a] border-r border-gray-800/50 flex flex-col">
-      {/* Header - Simplified, no name */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-800/50">
-        <div className="flex-1" /> {/* Spacer */}
+    <div className="
+      fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col
+      md:sticky md:top-0 md:w-1/2 md:h-screen md:border-r md:border-gray-800/50 md:z-auto md:flex-shrink-0
+    ">
+      {/* Header with close button */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-800/50">
+        <h2 className="text-lg font-semibold">Chat</h2>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-900 rounded-lg ml-auto"
+          className="text-white bg-gray-800 hover:bg-gray-700 transition-colors p-2.5 rounded-lg shadow-md"
           aria-label="Close chat"
         >
-          <X size={20} />
+          <X size={22} />
         </button>
       </div>
 

@@ -1,0 +1,9 @@
+SUMMARY OF FIXES TO APPLY:
+
+1. Make close button more visible (white on gray background, larger)
+2. Keep header/navigation visible on desktop when chat opens
+3. Invert social icons (dark on light background)
+
+The main structural issue is that header/nav are inside the conditional hiding block. On desktop when chat opens, the entire main content area (including header) is being pushed down or hidden.
+
+Let me create the complete fixed page.tsx with proper structure.

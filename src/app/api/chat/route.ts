@@ -1,23 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { findRelevantContext } from '@/lib/rag';
+import { getCachedResponse, cacheResponse, isCachingEnabled } from '@/lib/redis';
+import { logChatInteraction, isDatabaseAvailable, updateAbuseSession } from '@/lib/supabase';
 
-// Abuse detection system
+// Abuse detection system (in-memory fallback)
 const abuseTracker = new Map<string, { count: number; lastReset: number }>();
 
 function isRelevantQuery(message: string): boolean {
-  // Normalize message
   const normalized = message.toLowerCase().trim();
   
-  // Detect obvious abuse patterns FIRST (before checking keywords)
-  // Math patterns - catch anywhere in the message
+  // Detect abuse patterns FIRST
   const mathPatterns = [
-    /\d+\s*[+\-*/x÷]\s*\d+/,  // "1+1", "5*3", "whats 1+1", "calculate 5-2"
+    /\d+\s*[+\-*/x÷]\s*\d+/,
     /\d+\s*(plus|minus|times|divided by|multiplied by)\s*\d+/i,
     /(what('s| is)|calculate|compute|solve)\s*\d+\s*[+\-*/x÷]\s*\d+/i,
   ];
   
-  // General knowledge patterns
   const generalKnowledgePatterns = [
     /what('s| is) the (capital|population|currency|language) of/i,
     /what('s| is) the (weather|temperature|time|date)/i,
@@ -26,7 +25,6 @@ function isRelevantQuery(message: string): boolean {
     /where (is|was|are)/i,
   ];
   
-  // Personal assistance patterns
   const assistancePatterns = [
     /(write|draft|create|compose) (a|an|my) (email|letter|essay|story|poem|document)/i,
     /(book|schedule|reserve|order|buy|purchase) (a|an|my|me)/i,
@@ -35,67 +33,52 @@ function isRelevantQuery(message: string): boolean {
     /translate .* to/i,
   ];
   
-  // Combine all abuse patterns
   const allAbusePatterns = [...mathPatterns, ...generalKnowledgePatterns, ...assistancePatterns];
   
-  // Check for abuse FIRST - if it's abuse, reject immediately regardless of keywords
   const isAbuse = allAbusePatterns.some(pattern => pattern.test(normalized));
   if (isAbuse) {
     console.log('🚫 Abuse pattern detected:', normalized);
     return false;
   }
   
-  // Professional/resume-related keywords (more specific now, removed overly broad "what")
+  // Relevant keywords
   const relevantKeywords = [
-    // Identity & info - be more specific
     'aditya', 'your background', 'your experience', 'your skills',
-    'who are you', 'tell me about you', 'about you',
-    // Experience related
+    'who are you', 'tell me about you', 'about you', 'overview', 'quick overview', 'summary',
     'experience', 'work', 'worked', 'job', 'role', 'position', 'company', 'employer',
     'google', 'kpmg', 'kcm', 'souq', 'oxford', 'lse',
-    // Skills & technical
     'skill', 'python', 'ai', 'ml', 'machine learning', 'data', 'project',
     'tensorflow', 'pytorch', 'aws', 'cloud', 'langchain', 'rag',
-    // Education
     'education', 'degree', 'university', 'study', 'studied', 'london school',
-    // Projects
     'project', 'portfolio', 'built', 'developed', 'created',
-    // General career
     'career', 'background', 'qualification', 'achievement', 'award',
     'expertise', 'specialize', 'focus',
-    // Conversational (safe greetings)
     'hello', 'hi', 'hey', 'help', 'can you help'
   ];
   
-  // Check if query contains relevant keywords
   const hasRelevantKeywords = relevantKeywords.some(keyword => 
     normalized.includes(keyword)
   );
   
   if (hasRelevantKeywords) return true;
   
-  // For very short queries (< 15 chars), be more strict
-  // Allow generic greetings but nothing else
+  // Short queries
   if (normalized.length < 15) {
     const safeShortQueries = ['hi', 'hello', 'hey', 'help', 'thanks', 'ok', 'yes', 'no'];
     return safeShortQueries.some(q => normalized === q || normalized === q + '!');
   }
   
-  // Medium length queries (15-30 chars) without keywords are likely off-topic
   if (normalized.length < 30) return false;
-  
-  // Long queries without relevant keywords are definitely off-topic
   return false;
 }
 
 function trackAbuse(sessionId: string): { allowed: boolean; remaining: number } {
   const now = Date.now();
   const WINDOW_MS = 3600000; // 1 hour
-  const MAX_WARNINGS = 3; // 3 warnings per hour
+  const MAX_WARNINGS = 3;
   
   let tracker = abuseTracker.get(sessionId);
   
-  // Reset if window expired
   if (!tracker || now - tracker.lastReset > WINDOW_MS) {
     tracker = { count: 0, lastReset: now };
     abuseTracker.set(sessionId, tracker);
@@ -114,6 +97,8 @@ const groq = new Groq({
 });
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
     const { message, history = [] } = await request.json();
 
@@ -123,50 +108,109 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Get session identifier (using IP or generate session ID)
+    // Get session ID
     const sessionId = request.headers.get('x-forwarded-for') || 
                      request.headers.get('x-real-ip') || 
                      'anonymous';
+    
+    const userIp = sessionId;
+    const userAgent = request.headers.get('user-agent') || '';
 
     // Check if query is relevant
     const isRelevant = isRelevantQuery(message);
     
     if (!isRelevant) {
-      // Track abuse attempt
       const { allowed, remaining } = trackAbuse(sessionId);
       
       console.log('⚠️ Off-topic query detected:', message);
       console.log(`🔢 Abuse count for ${sessionId}: ${4 - remaining}/3, remaining: ${remaining}`);
       
-      if (!allowed) {
-        // Rate limit exceeded
-        console.log('🚫 RATE LIMITED:', sessionId);
-        return NextResponse.json({
-          response: "I appreciate your interest, but I've noticed multiple queries unrelated to Aditya's professional background. This chat is designed to answer questions about his experience, projects, and skills. Please ask relevant questions, or try again in an hour."
+      // Update abuse tracking in database
+      if (isDatabaseAvailable) {
+        await updateAbuseSession(sessionId, 4 - remaining, !allowed, 
+          !allowed ? new Date(Date.now() + 3600000) : undefined
+        );
+      }
+      
+      const responseTimeMs = Date.now() - startTime;
+      const warningMessage = allowed
+        ? `I'm Aditya's AI assistant, designed to answer questions about his professional background, experience, projects, and skills. Your question doesn't seem related to these topics.\n\nYou have ${remaining} ${remaining === 1 ? 'warning' : 'warnings'} remaining before being rate-limited.\n\nPlease ask about:\n• My work experience and roles\n• My technical skills and projects\n• My education and achievements\n• My AI/ML expertise\n\nHow can I help you learn about Aditya's professional background?`
+        : "I appreciate your interest, but I've noticed multiple queries unrelated to Aditya's professional background. This chat is designed to answer questions about his experience, projects, and skills. Please ask relevant questions, or try again in an hour.";
+      
+      // Log to database
+      if (isDatabaseAvailable) {
+        await logChatInteraction({
+          sessionId,
+          userQuery: message,
+          assistantResponse: warningMessage,
+          responseTimeMs,
+          wasCached: false,
+          wasBlocked: true,
+          blockReason: 'off_topic',
+          userIp,
+          userAgent,
         });
       }
       
-      // First few warnings - be helpful
-      console.log(`⚠️ WARNING ${4 - remaining}/3 for ${sessionId}`);
-      return NextResponse.json({
-        response: `I'm Aditya's AI assistant, designed to answer questions about his professional background, experience, projects, and skills. Your question doesn't seem related to these topics.\n\nYou have ${remaining} ${remaining === 1 ? 'warning' : 'warnings'} remaining before being rate-limited.\n\nPlease ask about:\n• My work experience and roles\n• My technical skills and projects\n• My education and achievements\n• My AI/ML expertise\n\nHow can I help you learn about Aditya's professional background?`
-      });
+      if (!allowed) {
+        console.log('🚫 RATE LIMITED:', sessionId);
+      } else {
+        console.log(`⚠️ WARNING ${4 - remaining}/3 for ${sessionId}`);
+      }
+      
+      return NextResponse.json({ response: warningMessage });
     }
     
-    console.log('✅ Query is relevant, processing with RAG...');
+    console.log('✅ Query is relevant, processing...');
 
+    // ========================================
+    // STEP 1: Check cache BEFORE calling LLM
+    // ========================================
+    if (isCachingEnabled()) {
+      console.log('💾 Checking cache...');
+      const cached = await getCachedResponse(message);
+      
+      if (cached) {
+        const responseTimeMs = Date.now() - startTime;
+        console.log(`⚡ Serving from cache (${responseTimeMs}ms)`);
+        
+        // Log cache hit
+        if (isDatabaseAvailable) {
+          await logChatInteraction({
+            sessionId,
+            userQuery: message,
+            assistantResponse: cached.response,
+            relevantContext: cached.context,
+            responseTimeMs,
+            wasCached: true,
+            wasBlocked: false,
+            userIp,
+            userAgent,
+          });
+        }
+        
+        return NextResponse.json({ 
+          response: cached.response,
+          cached: true 
+        });
+      }
+    }
+
+    // ========================================
+    // STEP 2: Not cached - call LLM
+    // ========================================
+    
     if (!process.env.GROQ_API_KEY) {
       return NextResponse.json({
         response: 'Please add GROQ_API_KEY to your .env.local file. Get it from https://console.groq.com/keys'
-      });
+      }, { status: 500 });
     }
 
-    // 🔍 RAG: Find relevant context from CV
+    // Find relevant context using RAG
     console.log('🔍 Finding relevant context...');
-    const relevantContext = findRelevantContext(message, 3);
-    console.log('✅ Found context:', relevantContext.substring(0, 200) + '...');
+    const relevantContext = findRelevantContext(message);
 
-    // Build system prompt with RAG context
+    // Build system prompt
     const systemPrompt = `You are Aditya Tamilisetti, a Data Scientist and AI Engineer based in London.
 
 CONTEXT FROM CV:
@@ -174,51 +218,68 @@ ${relevantContext}
 
 Answer questions as Aditya in first person ("I", "my"). Be concise (2-3 sentences unless detail is requested), professional, and helpful. Use information from the context above when relevant.`;
 
-    // Build conversation messages
+    // Build messages array
     const messages = [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      ...history.slice(-4).map((msg: any) => ({
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-6).map((msg: any) => ({
         role: msg.role,
         content: msg.content
       })),
-      {
-        role: 'user',
-        content: message
-      }
+      { role: 'user', content: message }
     ];
 
     console.log('🤖 Calling Groq API...');
-
-    // Call Groq API
     const completion = await groq.chat.completions.create({
       messages: messages as any,
-      model: 'llama-3.1-8b-instant', // Fast and good quality
+      model: 'llama-3.1-8b-instant',
       temperature: 0.7,
       max_tokens: 300,
       top_p: 0.9,
     });
 
-    const response = completion.choices[0]?.message?.content || 
-      "I'm Aditya, a Data Scientist and AI Engineer in London. Ask me about my experience, projects, or skills!";
+    const response = completion.choices[0]?.message?.content || 'Sorry, I encountered an error.';
+    const responseTimeMs = Date.now() - startTime;
 
-    console.log('✅ Response generated:', response.substring(0, 100) + '...');
+    console.log(`✅ Response generated (${responseTimeMs}ms)`);
 
-    return NextResponse.json({ response });
+    // ========================================
+    // STEP 3: Cache the response
+    // ========================================
+    if (isCachingEnabled()) {
+      console.log('💾 Caching response...');
+      await cacheResponse(message, response, relevantContext);
+    }
 
-  } catch (error: any) {
-    console.error('❌ Chat error:', error.message);
-    
-    if (error.message?.includes('API key')) {
-      return NextResponse.json({
-        response: 'API key error. Please check your GROQ_API_KEY in .env.local'
+    // ========================================
+    // STEP 4: Log to database
+    // ========================================
+    if (isDatabaseAvailable) {
+      console.log('📝 Logging to database...');
+      await logChatInteraction({
+        sessionId,
+        userQuery: message,
+        assistantResponse: response,
+        relevantContext,
+        responseTimeMs,
+        wasCached: false,
+        wasBlocked: false,
+        userIp,
+        userAgent,
       });
     }
 
-    return NextResponse.json({
-      response: "Hi! I'm Aditya, a Data Scientist and AI Engineer in London. I specialize in RAG systems, intelligent agents, and production AI. Ask me about my work!"
+    return NextResponse.json({ 
+      response,
+      cached: false 
     });
+
+  } catch (error) {
+    console.error('❌ Chat API error:', error);
+    const responseTimeMs = Date.now() - startTime;
+    
+    return NextResponse.json({
+      response: 'Sorry, I encountered an error. Please try again.',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
